@@ -1,0 +1,13 @@
+
+You have a chance to retry completing this task. 
+After carefully reviewing the above trajectory, provide me with a verbal feedback, which will later guide other agents on the strategy they should adopt in state t. 
+First, provide your reasoning process, then the final verbal feedback, which should be as concise as possible.
+Consider result and goal when making decisions.
+
+DESIRED FORMAT:
+<reasoning>
+YOUR REASONING HERE.
+</reasoning>
+<feedback you should follow>
+VERBAL FEEDBACK HERE.
+</feedback you should follow>

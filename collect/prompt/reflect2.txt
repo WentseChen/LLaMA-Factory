@@ -1,0 +1,4 @@
+I'll provide you with a trajectory that includes your goal, actions taken, and states encountered. 
+The map is presented at state t, and in the following state, we only provide the agent's position and orientation.
+At the end of the trajectory, it shows whether you successfully achieve the goal.
+You have to analyze the trajectory and provide verbal feedback on how to improve the agent's policy at state t for the next trial.

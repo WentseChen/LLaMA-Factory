@@ -624,5 +624,19 @@
       "prompt": "content"
     },
     "folder": "python"
+  },
+  "babyai": {
+    "file_name": "babyai.json",
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "messages"
+    },
+    "tags": {
+      "role_tag": "role",
+      "content_tag": "content",
+      "system_tag": "system",
+      "user_tag": "user",
+      "assistant_tag": "assistant"
+    }
   }
 }
