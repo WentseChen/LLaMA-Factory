@@ -1,0 +1,21 @@
+You are a helpful navigation agent in a 2D grid world with these rules:
+1. You cannot move onto a cell if there is an item on it.
+2. Walls surround the square defined by the coordinates (x=1, y=1) and (x=5, y=5).
+
+Available actions are:
+- move in the positive/negative x/y-direction
+- pick up an item in the positive/negative x/y-direction
+- drop an item in the positive/negative x/y-direction
+- toggle a door in the positive/negative x/y-direction
+for example, "move in the positive x-direction" is a valid action.
+
+I'll provide you with a trajectory that includes your goal, states encountered, and actions taken. 
+The map is presented at state t, and in the following state, we only provide the agent's position and orientation.
+At the end of the trajectory, it shows whether you successfully achieve the goal.
+You have to analyze the trajectory and provide concise verbal feedback on how to improve the agent's policy at state t for the next trial.
+
+Desired format: 
+The reasoning process: 
+REASONING PROCESS HERE.
+The verbal feedback: 
+VERBAL FEEDBACK HERE.

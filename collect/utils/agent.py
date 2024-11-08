@@ -6,12 +6,12 @@ from .utils import load_text, build_prompt, get_assistant_index
 
 class LlamaAgent():
     
-    def __init__(self, model, tokenizer, accelerator, env, system_tmp):
+    def __init__(self, model, tokenizer, env, system_tmp, human_tmp):
         self.model = model
         self.tokenizer = tokenizer
-        self.accelerator = accelerator
         self.env = env
         self.system_msg = {"role": "system", "content": system_tmp}
+        self.human_tmp = human_tmp
       
     def _build_prompt(self, obs):
         """
@@ -28,13 +28,25 @@ class LlamaAgent():
         # builtd prompt
         input_ids_list = []
         for o in obs:
-            human_msg = {"role": "user", "content": o}
+            human_msg = {"role": "user", "content": o + self.human_tmp}
             for act in self.env.available_actions:
-                a_str = "<next action>\n" + act + "\n</next action>\n"
+                a_str = "My next action is to " + act
                 action_msg = {"role": "assistant", "content": a_str}
                 input_msg = [self.system_msg, human_msg, action_msg]
                 input_ids = build_prompt(self.tokenizer, input_msg)
+                attention_mask = torch.ones_like(input_ids)
                 input_ids_list.append(input_ids)
+                
+        # padding
+        max_len = max([len(ids[0]) for ids in input_ids_list])
+        batch_input_ids = torch.zeros((len(input_ids_list), max_len)).long().to(self.model.device)
+        batch_attention_mask = torch.ones((len(input_ids_list), max_len)).long().to(self.model.device)
+        for i in range(len(input_ids_list)):
+            pad_len = max_len - len(input_ids_list[i][0])
+            batch_input_ids[i][:len(input_ids_list[i][0])] = input_ids_list[i][0]
+            batch_attention_mask[i][len(input_ids_list[i][0]):] = 0
+                
+        return batch_input_ids, batch_attention_mask
                 
     def _fast_build_prompt(self, obs):
         """
@@ -47,11 +59,12 @@ class LlamaAgent():
         batch_input_ids: torch.Tensor, padding on the right
         batch_attention_mask: torch.Tensor
         """
+        raise NotImplementedError
         
         # builtd prompt
         input_ids_list = []
         for o in obs:
-            human_msg = {"role": "user", "content": o+"After reading through the rules of the environment, your goal and all the current observation. What is the next action to achieve your goal?"}
+            human_msg = {"role": "user", "content": o + self.human_tmp}
             for act in self.env.available_actions[::4]:
                 a_str = "<next action>\n" + act + "\n</next action>\n"
                 action_msg = {"role": "assistant", "content": a_str}
@@ -101,7 +114,7 @@ class LlamaAgent():
         """
         decode, but with less computation
         """
-        
+        raise NotImplementedError
         all_log_probs = []
         for i in range(len(batch_input_ids)):
             logits = output.logits[i] / temperature
@@ -132,36 +145,30 @@ class LlamaAgent():
         sample_action_text: list of str
         """
         
-        self.accelerator.wait_for_everyone()
+        if fast:
+            batch_input_ids, batch_attention_mask = self._fast_build_prompt(obs)
+        else:
+            batch_input_ids, batch_attention_mask = self._build_prompt(obs)
         
-        with self.accelerator.split_between_processes(obs) as obs:
+        # forward
+        # Note: by default, we will use model_parallel when setting device_map='auto'
+        # todo: add support for data_parallel to speed up
+        with torch.no_grad():
             
-            if fast:
-                batch_input_ids, batch_attention_mask = self._fast_build_prompt(obs)
-            else:
-                batch_input_ids, batch_attention_mask = self._build_prompt(obs)
-            
-            # forward
-            # Note: by default, we will use model_parallel when setting device_map='auto'
-            # todo: add support for data_parallel to speed up
-            with torch.no_grad():
-                
-                output = self.model(
-                    batch_input_ids.to("cuda"), 
-                    attention_mask=batch_attention_mask.to("cuda")
-                )
-            
-            if fast:
-                all_log_probs = self._fast_decode_action(output, batch_input_ids, temperature)
-            else:
-                all_log_probs = self._decode_action(output, batch_input_ids, temperature)
-                
-            all_log_probs = all_log_probs.view(len(obs), -1)
-            all_probs = all_log_probs.exp()
-            norm_probs = all_probs / all_probs.sum(dim=-1, keepdim=True)
-            
-        probs = self.accelerator.gather(norm_probs)
-        sample_action = torch.distributions.Categorical(probs)
+            output = self.model(
+                batch_input_ids.to(self.model.device), 
+                attention_mask=batch_attention_mask.to(self.model.device)
+            )
+        
+        if fast:
+            all_log_probs = self._fast_decode_action(output, batch_input_ids, temperature)
+        else:
+            all_log_probs = self._decode_action(output, batch_input_ids, temperature)
+        
+        all_log_probs = all_log_probs.view(len(obs), -1)
+        all_probs = all_log_probs.exp()
+        norm_probs = all_probs / all_probs.sum(dim=-1, keepdim=True)
+        sample_action = torch.distributions.Categorical(norm_probs)
         
         return sample_action
         
@@ -169,8 +176,9 @@ class LlamaAgent():
 
 if __name__ == "__main__":
     
-    from llamafactory.collect.env import MiniGrid, ActionWrapper, KeyDoorWrapper
-    from llamafactory.collect.venv import vEnv
+    from env import MiniGrid, ActionWrapper, KeyDoorWrapper
+    from venv import vEnv
+    from utils import load_text
     import time
     begin = time.time()
     
@@ -191,11 +199,13 @@ if __name__ == "__main__":
         env = ActionWrapper(env)
         env = KeyDoorWrapper(env)
         return env
-    env_num = 16
-    env = vEnv(env_num, env_func, scenario="BabyAI-UnlockLocal-v0")
+    env_num = 1
+    env = vEnv(env_num, env_func, scenario="BabyAI-GoToDoor-v0")
+    
+    system_tmp = load_text("../prompt/policy.txt")
     
     # load agent 
-    agent = LlamaAgent(model, tokenizer, env)
+    agent = LlamaAgent(model, tokenizer, env, system_tmp)
     
     # prepare env
     all_imgs = []

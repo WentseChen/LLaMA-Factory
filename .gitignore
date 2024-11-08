@@ -172,3 +172,7 @@ wandb/
 
 /data/babyai.json
 /data/logs
+/data/phase*
+/collect/test/*.gif
+/collect/utils/*.gif
+/data/*.gif

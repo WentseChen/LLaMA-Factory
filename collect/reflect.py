@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--model_name', type=str, default="/zfsauton2/home/wentsec/Meta-Llama-3.1-8B-Instruct", help='policy model name')
 parser.add_argument('--batch_size', type=int, default=256, help='number batch size for each iteration')
 parser.add_argument('--mini_batch_size', type=int, default=64, help='number batch size for each iteration')
-parser.add_argument('--max_tokens', type=int, default=4096, help='number of max tokens for gpt prompt')
+parser.add_argument('--max_tokens', type=int, default=8192, help='number of max tokens for gpt prompt')
 parser.add_argument('--file_path', type=str, default="/zfsauton2/home/wentsec/incontext_RL/test", help='where to save the data')
 args = parser.parse_args()
 
@@ -43,6 +43,22 @@ def batch_gpt(msgs_list):
     results = asyncio.run(async_batch_gpt(msgs_list))
     return results
 
+# wait for the server to start
+test_msg = [{
+    "idx": 0,
+    "messages": [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Reply to this message with Hello."}
+    ]
+}]
+while True:
+    try:
+        result = batch_gpt(test_msg)
+        break
+    except Exception as e:
+        print("Failed to get GPT response, retrying...")
+        time.sleep(.25)
+
 # load data from json
 file_name = args.file_path + "/phase1.json"
 with open(file_name, "r") as f:
@@ -54,12 +70,10 @@ all_output_data = {
     "verbal_feedback": [],
 }
 
-
 # get feedback prompt
-system_msg = load_text("prompt/reflect1.txt")
-system_msg = {"role": "system", "content": system_msg}
-human_msg_opener = load_text("prompt/reflect2.txt")
-human_msg_closer = load_text("prompt/reflect3.txt")
+system_tmp = load_text("prompt/reflect_system.txt")
+system_msg = {"role": "system", "content": system_tmp}
+human_tmp = load_text("prompt/reflect_human.txt")
 
 
 gpt_cache = []
@@ -68,8 +82,7 @@ checked = [False for _ in range(len(all_input_data["traj"]))]
 while len(all_output_data["verbal_feedback"]) <= args.batch_size:
     
     traj = all_input_data["traj"][idx]
-    human_msg = human_msg_opener + traj + human_msg_closer
-    human_msg = {"role": "user", "content": human_msg}
+    human_msg = {"role": "user", "content": traj + human_tmp}
     msg = [system_msg, human_msg]
     
     if not checked[idx]:
@@ -98,12 +111,13 @@ while len(all_output_data["verbal_feedback"]) <= args.batch_size:
             if responses[i] is None:
                 continue
             data_idx = gpt_cache[i]["idx"]
-            format_correct = "<feedback you should follow>" in responses[i]
+            # print("response:", responses[i])
+            # print("="*30)
+            format_correct = "VERBAL FEEDBACK:\n" in responses[i]
             # format_correct = format_correct and "</feedback you should follow>" in responses[i]
+            # print("format_correct:", format_correct)
             if format_correct:
-                verbal_fb = responses[i].split("<feedback you should follow>")[1]
-                if "</feedback you should follow>" in verbal_fb:
-                    verbal_fb = verbal_fb.split("\n</feedback you should follow>")[0]
+                verbal_fb = responses[i].split("VERBAL FEEDBACK:\n")[1]
                 checked[data_idx] = True
                 all_output_data["obs"].append(all_input_data["obs"][data_idx])
                 all_output_data["sampling_logp"].append(all_input_data["sampling_logp"][data_idx])

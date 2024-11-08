@@ -1,4 +1,4 @@
-model_name_or_path: /zfsauton2/home/wentsec/Meta-Llama-3.1-8B-Instruct
+model_name_or_path: /dev/shm/fine_tuned_models/fft/checkpoint
 template: llama3
 infer_backend: vllm
 vllm_enforce_eager: true

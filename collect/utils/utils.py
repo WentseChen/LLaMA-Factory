@@ -27,11 +27,11 @@ def build_prompt(tokenizer, msgs):
 def get_assistant_index(input_ids):
 
     length = input_ids.shape[-1]
-    # [27, 3684, 1957, 397] = <next action>\n
-    index_27 = torch.where(input_ids == 27)[0][-1] + 4
-    # [198, 524, 3684, 1957, 397] = \n</next action>\n
-    index_198 = torch.where(input_ids == 198)[0][-1]
-    return index_27.item(), index_198.item()
+    # [x, 1828, 1957, 374, x,] = My next action is to
+    index_begin = torch.where(input_ids == 1828)[0][-1] + 4
+    # [128009] = <|eot_id|>
+    index_end = torch.where(input_ids == 128009)[0][-1]
+    return index_begin.item(), index_end.item()
 
 def llm_logprob(tokenizer, model, input_msg, temperature=0.2, node_id="26"):
     
@@ -130,6 +130,8 @@ def get_traj(all_obs, all_act, result):
             if "door at" in o:
                 continue
             elif "key at" in o:
+                continue
+            elif "Your goal is to" in o:
                 continue
             obs += o + "\n"
         traj += "State t+{}\n".format(idx+1) + obs
